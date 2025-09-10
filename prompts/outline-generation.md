@@ -1,79 +1,86 @@
-"""
-Design a 6-Meeting Beginner Course Toward Applied AI Engineer Skills
+# PROMPT TEMPLATE — Generate a Graduate 6-Meeting Applied AI Course Plan
 
-**Role:** You are a senior Applied AI Engineer and instructor who designs practical, beginner-friendly curricula.
+You are a senior Applied AI Engineer and instructor who designs **practical, beginner-to-AI** curricula for **graduate students who can program** but are new to AI/ML. Students may freely use AI coding assistants; **no auditing of prompts is required**. Your job is to produce a tight, assignment-driven plan that guarantees real, reproducible outcomes on CPU.
 
-**Goal:** Create a 6-meeting class for beginners on **Methods of Artificial Intelligence** that cultivates the core habits of an applied AI engineer: problem framing, data handling, modeling, validation, error analysis, explainability/ethics, simple deployment, and communication.
+## High-level description (edit me)
+{HighLevelDescription}
+- Domain focus: {Domain}  (e.g., Computer Vision, NLP, Tabular, Time Series)
+- Course title: {CourseTitle}
+- Audience: Graduate students, fluent programmers, new to AI/ML
+- Meeting count & time: **6 meetings × 2 hours** each (+ ≤60 min homework per meeting)
+- Compute & tools: **Local CPU**, Git/GitHub (GitHub Classroom for autograding), pinned environments
+- Data policy: **Small, public datasets only**; deterministic splits; fixed seeds; reproducible scripts
+- Deliverable: **Tiny end-to-end project** + lightweight local **demo** in Meeting 6
+- Assistant policy: AI assistants allowed for code/boilerplate; focus on **assignments being correct & reproducible**; no test-set peeking
 
-**Audience & constraints**
+## Output requirements (produce all of the following, in order)
 
-* Audience: undergrads / CS / mixed background with prerequisites; basic Python or fluent programming skills.
-* Time per meeting: 2 hours of explanation meeting, assignments to take home. Total meetings: **6**.
-* Compute & tools: Local environment, github for version control is a must (teacher will use Github Classroom for assignments and autograding), stack should follow best practices.
-* Data policy: use **small, public datasets**; avoid heavy compute; ensure reproducibility (fixed seeds).
-* Teaching style: **applied-first**, necessary math, visuals over proofs, measurable outcomes each session.
-* Deliverables: a tiny end-to-end project and a demo in Meeting 6.
+1) **Course snapshot (1 paragraph):** who it’s for, what they’ll build, and the core skills they’ll practice.
 
-**What to produce (final answer only, no internal reasoning):**
+2) **Skill map table:** rows = core engineer skills  
+(framework/metric choice; data handling/EDA; modeling; validation + confidence intervals + thresholding; error analysis/slicing; explainability/ethics; deployment; communication).  
+Columns = Meeting #1–#6; mark where each skill is practiced (✓ and **bold** for emphasis).
 
-1. **Course snapshot (1 paragraph):** who it’s for, what they’ll build, and the core skills they’ll practice.
-2. **Skill map table:** rows = core engineer skills (framing, data, modeling, validation, error analysis, explainability/ethics, deployment, communication); columns = Meeting #1–#6; mark where each skill is practiced.
-3. **Seven-meeting plan (one page total):** for each meeting, give:
+3) **Six-meeting plan (one page total):** for each meeting provide:
+   - **Title & learning objectives** (3–5 bullets)
+   - **Core topics** (beginner-friendly, applied-first)
+   - **Hands-on lab** with **exact steps** and a **specific small public dataset** (prefer defaults below)
+   - **Homework** (≤60 min, concrete artifacts/plots/tables)
+   - **Success criteria/checkpoints** (measurable “done” conditions)
 
-   * Title & learning objectives (3–5 bullets)
-   * Core topics (keep beginner-friendly)
-   * Hands-on lab (datasets + exact steps)
-   * Homework (≤60 min)
-   * Success criteria/checkpoints (how we know they got it)
-4. **Mini-project brief (half page):** scope, acceptance criteria, suggested datasets, and the “ritual” (define metric → split → baseline → improve → error analysis → explainability → simple app).
-5. **Assessment & rubric (brief):** point weights for labs, homework, project demo, and a short reflection on ethics & limitations.
-6. **Tech stack & setup:** versions, quickstart links, template notebook structure, and any scaffolding you’ll provide.
-7. **Risk & mitigation:** likely beginner pitfalls (data leakage, overfitting, metric confusion, environment issues) and exactly how the course design prevents them.
-8. **Accessibility & ethics notes:** dataset considerations, bias checks (group metrics), and disclosure of limitations.
-9. **Stretch paths (optional):** 2–3 extensions for faster students (e.g., x-val, SHAP, Grad-CAM, simple A/B of two models).
+   **Graduate-level inclusions to weave in across meetings:**
+   - **Calibration** (Brier score + reliability curve)
+   - **Bootstrap 95% CIs** for key metrics
+   - **Expected-utility thresholding** using a simple cost matrix
+   - **Ablation** (e.g., freeze vs last-block unfreeze for transfer learning)
+   - **Robustness slice/shift probe** (e.g., brightness/blur/etc. for CV; domain slices for other domains)
+   - **Lightweight deploy** (CLI + local app) and a **tiny CPU load test** (throughput/latency)
 
-**Topic guidance (customize to {specific topic}):**
+4) **Mini-project brief (½ page):** scope, acceptance criteria, suggested datasets, and the ritual:  
+   _define metric & costs → split deterministically → baseline → improve → validate (CIs & threshold) → error analysis/slices → explainability → lightweight app_.
 
-* Emphasize an **end-to-end pipeline** in this domain.
-* Prefer **transfer learning / tree ensembles** for quick wins.
-* Include at least: baseline vs. improved model, proper validation, error slicing, a basic interpretability technique appropriate to the domain, and a **lightweight deploy** (CLI or Gradio).
+5) **Assessment & rubric (brief):** point weights for labs, homework, project, demo, and an ethics/limitations reflection. Penalize test-set peeking and nondeterminism.
 
-**Formatting:**
+6) **Tech stack & setup:** pinned versions, quickstart links, **template repo structure**, CLI commands to reproduce training/eval/app, and **autograder checks** (determinism, no leakage, CI/calibration artifacts, app runs, load test runs).
 
-* Use Markdown with clear section headers.
-* Provide one compact table for the 6-meeting schedule (rows = Meeting 1–6; columns = Objectives | Topics | Lab | Homework | Checkpoint).
-* Keep the whole output concise but actionable.
+7) **Risks & mitigations:** call out data leakage, overfitting on tiny data, metric confusion, environment drift, compute limits—plus **exact mitigations** embedded in the assignments.
 
-**Tone:** encouraging, concrete, beginner-friendly.
+8) **Accessibility & ethics notes:** dataset licensing/limitations, bias checks via slices, safe-use boundaries, model card expectations.
 
-**Do NOT include:** chain-of-thought or development notes—only the final plan.
+9) **Stretch paths (optional):** 2–3 extensions (e.g., CV: Grad-CAM++, occlusion sensitivity; NLP: SHAP/IG for tokens; Tabular: SHAP + calibration; Time Series: rolling-origin CV).
+
+## Formatting rules
+
+- Use **Markdown** with clear section headers.
+- Include **one compact table** for the 6-meeting schedule:  
+  rows = Meeting 1–6; columns = **Objectives | Topics | Lab | Homework | Checkpoint**.
+- Keep the whole output **concise but actionable** (≈1–2 pages).
+- **Do NOT include** chain-of-thought or development notes.
+
+## Domain adapters (choose appropriate defaults)
+
+- **If {Domain} = Computer Vision (default)**: prefer **transfer learning** (ResNet-18 or MobileNetV3), classical baseline **HOG + Linear SVM**, **Grad-CAM** for explainability, slices by brightness/blur/viewpoint; suggested datasets (tiny, public):  
+  - Hymenoptera (ants vs bees, torchvision tutorial), Oxford-IIIT Pet (binary subset), CIFAR-10 (≤3 classes, downsampled).
+- **If NLP**: baseline **bag-of-words/TF-IDF + Logistic Regression**; improved **Tiny DistilBERT**; explainability via **LIME/SHAP**; slices by length/domain; datasets: **SST-2**, **AG News** (subset).
+- **If Tabular**: baseline **Logistic Regression**; improved **XGBoost/LightGBM**; explainability via **SHAP**; slices by feature quantiles; datasets: **UCI Adult (subset)**, **HELOC (subset)**.
+- **If Time Series**: baseline **naïve/ARIMA (subset)**; improved **lightweight TCN/1D-CNN**; explainability via feature importance/occlusion; validation via **rolling-origin CV**; datasets: small public competition subsets.
+
+## Non-negotiables to enforce in assignments
+
+- Fixed random seeds; deterministic data splits saved as manifests.
+- No test-set access until **one sealed evaluation**.
+- Report **CI** with every main metric; include **calibration** plots where applicable.
+- Choose & defend an **operational threshold** via expected utility (simple cost matrix).
+- Provide a **local app (CLI + UI)** and a **tiny CPU load test** (images/sec or samples/sec; median latency).
+- Homework ≤60 minutes, each producing concrete artifacts (plots/tables/notes) that are referenced in checkpoints.
+
+## Tech stack guidance (default to Python & CPU)
+- Python 3.11; core libs: numpy, pandas, matplotlib; domain libs per {Domain} (e.g., PyTorch/Torchvision for CV; scikit-learn everywhere; grad-cam for CV; gradio for UI; pytest/pytest-cov; black/ruff; pre-commit).
+- Provide a pinned `requirements.txt`, a reproducible **train/eval/app** command trio, and **autograder test ideas** (determinism/leakage/CI/calibration/app).
 
 ---
-
-### Tiny example (filled, topics only)
-
-* M1: From Problem to Metric — turn a real task into a target + baseline.
-* M2: Data to First Model — clean/split data; train a simple baseline.
-* M3: Stronger Model — introduce {transfer learning / trees}; tune safely.
-* M4: Validate Right — holdout vs. CV; leakage traps; pick a metric that matches the goal.
-* M5: Error Analysis — slice by subgroup; confusion matrix; fix one failure mode.
-* M6: Explainability — SHAP/Grad-CAM
-
----
-
-### Emphasis: What students should learn after the course
-
-Short answer: **mostly, yes—but it’s “decision-making + verification + communication.”**
-When AI writes the boilerplate, the student’s highest-value work shifts to the parts machines don’t own:
-
-* **Problem framing:** define the objective, target, constraints, and success metric that actually match the use case.
-* **Metric & threshold choice:** pick ROC-AUC vs PR-AUC, set a threshold from a **cost matrix**, and justify it.
-* **Data judgment:** spot leakage, decide what to drop/engineer, check stratification and support sizes for slices.
-* **Validation design:** choose CV vs holdout, prevent peeking, compute CIs, read calibration/Brier—not just a single score.
-* **Error analysis & fairness:** select slices, interpret gaps, propose trade-offs or mitigations.
-* **Result auditing:** reproduce numbers from artifacts, sanity-check LLM output, catch subtle bugs (e.g., encoder settings).
-* **Communication:** write the model card, defend choices in a 3-minute demo, explain counterfactuals/limitations.
-* **Ops hygiene:** seeds, versioning, pipelines, and reproducible runs—so others can trust the work.
-
-In other words, AI accelerates **typing**; your course makes them practice **thinking**: deciding *what to do*, *why*, *how to verify it*, and *how to explain it*.
-"""
+# Generate the full plan now, applying the template above to:
+**Course:** {CourseTitle}  
+**High-level description:** {HighLevelDescription}  
+**Domain:** {Domain}  
+**Preferred small datasets:** {DatasetsOr“choose sensible defaults for this domain”}

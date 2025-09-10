@@ -1,249 +1,253 @@
-# 6‑Meeting Beginner Course: **Methods of AI (Computer Vision)**
+# 6-Meeting Beginner Course: **Methods of AI (Computer Vision)** — *Graduate Edition*
 
 ## 1) Course snapshot
 
-This course is for undergrads and early‑career developers with basic Python who want to become **applied** AI engineers in computer vision. In 6 two‑hour meetings you’ll build a tiny, reproducible **image classifier** end‑to‑end: from framing and metrics, through data handling and transfer learning, to validation, error analysis, explainability, and a lightweight **Gradio** demo. You’ll practice the habits that matter on the job—**decision‑making, verification, and communication**—using small public datasets, pinned environments, Git/GitHub workflows, fixed seeds, and measurable checkpoints every session.
+For grad students who can program but are new to AI/ML. In 6×2-hour meetings you’ll build a small, fully reproducible **image classifier** end-to-end: framing and metrics → data handling → classical baseline → **transfer learning** → validation with **CIs & expected-utility thresholding** → error slicing & fairness → **Grad-CAM** explainability → a lightweight **Gradio** demo (plus a tiny CPU **load test**). You’ll practice the core applied-engineer habits: **decision-making, verification (tests & calibration), and communication**, with small public datasets and pinned environments.
 
 ---
 
 ## 2) Skill map (where each habit is practiced)
 
-| Core Engineer Skill ↓ / Meeting →      |   M1  |   M2  |   M3  |   M4  |   M5  |   M6  |
-| -------------------------------------- | :---: | :---: | :---: | :---: | :---: | :---: |
-| Problem framing & metric choice        | **✓** |   ✓   |       |   ✓   |       |   ✓   |
-| Data handling & EDA                    | **✓** | **✓** |   ✓   |   ✓   |   ✓   |       |
-| Modeling (baseline → improved)         |       | **✓** | **✓** |   ✓   |       |       |
-| Validation & thresholding              |       |   ✓   |   ✓   | **✓** |   ✓   |       |
-| Error analysis & slicing               |       |       |       |   ✓   | **✓** |   ✓   |
-| Explainability & ethics                |       |       |       |       |   ✓   | **✓** |
-| Simple deployment (CLI/Gradio)         |       |       |       |       |       | **✓** |
-| Communication (repo, model card, demo) |   ✓   |   ✓   |   ✓   |   ✓   |   ✓   | **✓** |
+| Core Engineer Skill ↓ / Meeting →          |   M1  |   M2  |   M3  |   M4  |   M5  |   M6  |
+| ------------------------------------------ | :---: | :---: | :---: | :---: | :---: | :---: |
+| Problem framing & metric choice            | **✓** |   ✓   |       |   ✓   |       |   ✓   |
+| Data handling & EDA                        | **✓** | **✓** |   ✓   |   ✓   |   ✓   |       |
+| Modeling (baseline → improved)             |       | **✓** | **✓** |   ✓   |       |       |
+| Validation, CIs & thresholding             |       |   ✓   |   ✓   | **✓** |   ✓   |   ✓   |
+| Error analysis & slicing                   |       |       |       |   ✓   | **✓** |   ✓   |
+| Explainability & ethics                    |       |       |       |       |   ✓   | **✓** |
+| Simple deployment (CLI/Gradio + load test) |       |       |       |       |       | **✓** |
+| Communication (notes, model card, demo)    |   ✓   |   ✓   |   ✓   | **✓** |   ✓   | **✓** |
 
 ---
 
-## 3) Six‑meeting plan (concise)
+## 3) Six-meeting plan (concise)
 
 ### Meeting 1 — **From Problem to Metric + Reproducible Setup**
 
 **Objectives**
 
-* Frame a CV task, define **target**, **success metric**, and a basic **cost matrix**.
-* Create a deterministic, versioned environment; practice Git from day 1.
-* Make a **majority/random baseline** to anchor expectations.
+* Frame a CV task; define target, **success metric**, and a simple **cost matrix**.
+* Build a deterministic, versioned environment; introduce GitHub Classroom workflow.
+* Implement **majority/random baselines** and a “spec → generate → **verify**” habit.
 
-**Core topics**: pipeline overview; accuracy vs F1 vs PR‑AUC; class imbalance; fixed seeds; directory structure; GitHub flow; dataset licenses.
+**Core topics**: pipeline overview; accuracy vs F1 vs **PR-AUC**; class imbalance; fixed seeds; directory structure; dataset licensing.
 
-**Hands‑on lab (20–40 min)**
-Dataset: **Hymenoptera (Ants vs Bees)** from torchvision tutorial (≈400 train/val images).
+**Hands-on lab (20–40 min)**
+Dataset: **Hymenoptera (Ants vs Bees)** (tiny, public).
 Steps:
 
-1. Clone course template; create `venv`; install pinned `requirements.txt`.
-2. Implement `seed_everything()` and **stratified** train/val/test split saved to disk (CSV of file paths + labels).
-3. Compute class balance; implement **majority** and **random** baselines; log metrics.
+1. Clone course template; create `venv`; install pinned deps.
+2. Write a docstring/spec for `seed_everything()`; implement; **unit test** for determinism.
+3. Deterministic **stratified** train/val/test split saved as CSV manifests.
+4. Compute class balance; implement majority & random baselines; log metrics.
 
 **Homework (≤60 min)**
 
-* Write a 6–8 sentence **problem brief**: use case, metric, cost matrix, and acceptance threshold.
-* Commit a `data_card.md` (source, license, size, known biases).
+* **Problem brief** (6–8 sentences): use case, primary metric, cost matrix, acceptance threshold.
+* **Data card** (source, license, size, class balance, obvious biases).
 
 **Success criteria / checkpoint**
 
-* Reproducible split artifacts; baseline metrics table in `reports/metrics_baseline.csv`; problem brief merged via PR.
+* Split manifests on disk; passing unit test for seeding; baseline metrics file in `reports/`.
 
 ---
 
-### Meeting 2 — **Data to First Model (Classical Features)**
+### Meeting 2 — **Data to First Model (Classical Features + Calibration)**
 
 **Objectives**
 
-* Implement minimal preprocessing & **deterministic** augmentations.
-* Extract **HOG** features and train a **Linear SVM** or **Logistic Regression** baseline.
-* Read a **confusion matrix** and pick a threshold using your cost matrix.
+* Build a deterministic preprocessing pipeline.
+* Extract **HOG** (or HOG+color) features; train **Linear SVM** (or Logistic Regression).
+* Read a **confusion matrix**; plot **PR curve**; compute **Brier score** & **calibration curve**.
 
-**Core topics**: resizing/normalization; HOG/color histograms; train/val/test discipline; confusion matrix; precision‑recall & thresholding.
+**Core topics**: resizing/normalization; classical features; threshold from PR & costs; calibration 101.
 
-**Hands‑on lab**
-Dataset: Hymenoptera.
+**Hands-on lab**
 Steps:
 
-1. Build `torchvision.transforms` pipeline (resize→center crop; deterministic).
-2. Extract HOG (via scikit‑image) → train **Linear SVM** (`scikit‑learn`) with class weights.
-3. Evaluate accuracy, macro‑F1, **PR‑AUC**; pick operational threshold; save plots.
+1. `torchvision.transforms` (train vs eval paths).
+2. HOG feature extraction → Linear SVM with class weights.
+3. Metrics: accuracy, macro-F1, PR-AUC, **Brier score**; calibration plot; choose threshold.
+4. **Unit tests**: (a) HOG output shape, (b) transform determinism.
 
 **Homework (≤60 min)**
 
-* Plot top‑12 **false positives/negatives** with captions; propose 1 concrete data/feature fix.
+* Visualize top-12 false positives/negatives with captions; propose 1 concrete fix (data/feature/threshold).
 
 **Checkpoint**
 
-* `reports/confusion_matrix.png`, `reports/pr_curve.png`, and `errors/` thumbnails; baseline beats majority.
+* Plots: confusion, PR, **calibration**; baseline beats majority; tests passing.
 
 ---
 
-### Meeting 3 — **Stronger Model via Transfer Learning**
+### Meeting 3 — **Stronger Model via Transfer Learning (with Ablation)**
 
 **Objectives**
 
-* Explain transfer learning; **freeze** vs **fine‑tune**.
-* Train a **ResNet‑18 / MobileNetV3** head on CPU in minutes (frozen backbone).
-* Track learning curves; avoid overfitting with early stopping.
+* Understand **freeze vs fine-tune**; train a **ResNet-18/MobileNetV3** head on CPU.
+* Track learning curves; early stopping; compare against classical baseline.
+* Run a tiny **ablation**: frozen backbone vs “last block unfrozen”.
 
-**Core topics**: pre‑trained encoders; cross‑entropy; learning rate; early stopping; saving **best** checkpoints.
+**Core topics**: pre-trained encoders; LR & weight decay; capacity control; early stopping.
 
-**Hands‑on lab**
+**Hands-on lab**
 Steps:
 
-1. Use torchvision pretrained `resnet18` (ImageNet). Freeze all but final layer; train for 3–5 epochs.
-2. Optional: unfreeze last block for +1 epoch.
-3. Compare to HOG‑SVM; log both to `reports/compare_models.csv`.
+1. Load pretrained `resnet18`; freeze all but final layer; train 3–5 epochs CPU-only.
+2. Optional +1 epoch with last block unfrozen.
+3. Compare models in `reports/compare_models.csv`.
+4. Save **best checkpoint**; scriptable train/eval.
 
 **Homework (≤60 min)**
 
-* Safely tune **one** hyperparameter (LR or augmentation intensity) and justify; update comparison table.
+* Safely tune **one** hyperparameter (LR or augmentation intensity).
+* Compute a small **paired bootstrap CI** (on validation predictions) for frozen vs unfrozen F1.
 
 **Checkpoint**
 
-* Transfer model improves macro‑F1 by ≥5 points on **validation** without test peeking; best checkpoint saved.
+* Transfer model improves macro-F1 ≥5 pts (val); ablation table with CI; best checkpoint saved.
 
 ---
 
-### Meeting 4 — **Validate Right (No Leakage)**
+### Meeting 4 — **Validate Right (CIs, Expected Utility & Sealed Test)**
 
 **Objectives**
 
-* Design validation: **stratified hold‑out** vs **(light) K‑fold** on train only.
-* Compute **bootstrap confidence intervals**; set threshold from PR curve.
-* Catch/avoid **leakage** in transforms and file handling.
+* Design validation: **stratified hold-out** vs light **K-fold** (on train only).
+* Compute **bootstrap 95% CIs**; set threshold by **expected utility** using cost matrix.
+* Run one final **sealed test** evaluation; write a concise **Validation Note**.
 
-**Core topics**: data splits; repeated seeds; CI via bootstrap; calibration basics; reproducible eval script.
+**Core topics**: repeated CV; bootstrap; calibration touch-up; threshold as decision, not score.
 
-**Hands‑on lab**
+**Hands-on lab**
 Steps:
 
-1. Add `kfold.py` (e.g., 3× repeated 3‑fold on train).
-2. Aggregate metrics with 95% CI; freeze a threshold from validation PR.
-3. Run **one** final test set evaluation; write `evaluation_report.json`.
+1. 3× repeated 3-fold CV on train; aggregate metrics + 95% CI.
+2. Pick threshold from PR curve that **minimizes expected cost** (per your matrix).
+3. Single sealed-test run; save `evaluation_report.json` (+ CI & threshold).
 
 **Homework (≤60 min)**
 
-* 1‑page **Validation Note**: split choice, CI, threshold, leakage checks.
+* **Validation Note** (≤1 page): split design, CI method, chosen threshold & expected cost, leakage checks.
 
 **Checkpoint**
 
-* CIs reported; single sealed test result; `tests/` autograder passes “no‑leakage” checks.
+* CI reported; threshold justified by expected utility; sealed test result stored.
 
 ---
 
-### Meeting 5 — **Error Analysis, Slicing & Fairness**
+### Meeting 5 — **Error Analysis, Slicing, Fairness & Robustness**
 
 **Objectives**
 
-* Slice performance by **brightness/blur/viewpoint** proxies; read gaps.
-* Propose and validate a targeted fix (data augmentation, class weights, threshold).
-* Document trade‑offs and risks.
+* Slice performance by **brightness/blur/viewpoint** proxies; identify gaps.
+* Perform a targeted **fix** (e.g., augmentation, class weights, threshold tweak) and re-measure.
+* Add a simple **distribution-shift probe** (e.g., held-out lighting condition).
+* Write a short **risk memo** (limitations & safe use).
 
-**Core topics**: slice metrics; subgroup support sizes; ablations; fairness thinking for CV (domain fairness, not demographics).
+**Core topics**: slice metrics, supports; ablations; fairness as performance equity across domain slices; robustness.
 
-**Hands‑on lab**
+**Hands-on lab**
 Steps:
 
-1. Compute slices (e.g., luminance quartiles, motion‑blur score).
-2. Make a small **ablation table** (before/after your fix).
-3. Write a short **risk statement** (where the model fails).
+1. Compute slice metrics (e.g., luminance quartiles, blur score).
+2. Implement one fix; produce an **ablation table** (before/after, global + slices).
+3. Create a mini **shift set** (e.g., deliberately darkened images) and report metrics.
 
 **Homework (≤60 min)**
 
-* Finalize the fix; update ablation & narrative.
+* Finalize fix; update ablation & narrative; draft **risk memo** (≤300 words).
 
 **Checkpoint**
 
-* Slice report with at least one gap reduced **without** regressing global F1 >2 points.
+* At least one problematic slice improved without regressing global F1 by >2 pts; shift probe reported.
 
 ---
 
-### Meeting 6 — **Explainability + Lightweight Deploy + Demo**
+### Meeting 6 — **Explainability + Lightweight Deploy + Demo (with Load Test)**
 
 **Objectives**
 
-* Use **Grad‑CAM** to visualize predictions and spot spurious cues.
-* Ship a local **Gradio** app and a CLI; write a **Model Card**.
-* Deliver a 3‑minute demo and answer questions.
+* Use **Grad-CAM** to visualize decisions; spot spurious cues.
+* Ship a CPU-only **Gradio** app and a CLI; run a tiny **load test** (throughput/latency).
+* Complete a **Model Card**; deliver a crisp 3-minute demo.
 
-**Core topics**: Grad‑CAM basics; model cards (intended use, data, metrics, limits); packaging & reproducible runs.
+**Core topics**: Grad-CAM basics; model cards (intended use, data, metrics with CIs, limits); packaging; perf sanity checks.
 
-**Hands‑on lab**
+**Hands-on lab**
 Steps:
 
-1. Generate Grad‑CAM overlays for 8 correctly and 8 incorrectly classified images.
+1. Generate Grad-CAM overlays for 8 correct + 8 incorrect predictions; discuss failure patterns.
 2. Build `app.py` (Gradio) + `predict.py` (CLI).
-3. Finish `MODEL_CARD.md` and a 3‑slide deck.
+3. Add a **10-line load test** (images/sec & median latency on CPU).
+4. Finish `MODEL_CARD.md` and 3-slide demo deck.
 
 **Homework (≤60 min)**
 
-* Polish mini‑project; merge PR; tag a release.
+* Polish mini-project; tag a release; rehearse demo.
 
 **Checkpoint**
 
-* App runs locally on CPU; explanations rendered; model card complete; demo delivered.
+* App runs locally; explanations rendered; **calibration & throughput** briefly shown in demo; model card complete.
 
 ---
 
 ### Compact schedule table
 
-| Meeting | Objectives (short)                           | Topics                             | Lab                                                           | Homework                        | Checkpoint                         |
-| ------- | -------------------------------------------- | ---------------------------------- | ------------------------------------------------------------- | ------------------------------- | ---------------------------------- |
-| **M1**  | Frame task, metric, cost; reproducible setup | Pipeline, metrics, seeds, Git      | Set up repo/venv; stratified split; majority/random baselines | Problem brief + data card       | Split artifacts + baseline metrics |
-| **M2**  | Preprocess; classical baseline; threshold    | HOG, SVM/LogReg, PR curve          | HOG→SVM; confusion matrix; choose threshold                   | Visualize top errors + fix idea | Plots + better‑than‑majority       |
-| **M3**  | Transfer learning; early stopping            | ResNet18/MobileNetV3, freezing, LR | Train frozen head; compare to baseline                        | Tune one hyperparam             | F1 ↑ ≥5 pts; best checkpoint       |
-| **M4**  | Solid validation; CI; anti‑leakage           | K‑fold, bootstrap CI, calibration  | Repeated CV on train; freeze threshold; single test eval      | 1‑page Validation Note          | CIs + sealed test result           |
-| **M5**  | Slice & fix; fairness trade‑offs             | Slice metrics, ablations, risk     | Brightness/blur slices; targeted fix                          | Update ablation + narrative     | Gap reduced; no big regression     |
-| **M6**  | Explain, deploy, present                     | Grad‑CAM, model cards, Gradio      | Grad‑CAM overlays; CLI+Gradio app                             | Polish & release                | App + model card + demo            |
+| Meeting | Objectives (short)                                   | Topics                                   | Lab                                                  | Homework                            | Checkpoint                      |
+| ------- | ---------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------- | ----------------------------------- | ------------------------------- |
+| **M1**  | Frame task; metric & costs; repro setup; spec→verify | Pipeline, metrics, seeds, Git            | Split manifests; baseline; unit test for seeding     | Problem brief + data card           | Repro splits + baseline metrics |
+| **M2**  | Classical baseline + **calibration**                 | HOG/SVM, PR curve, Brier                 | HOG→SVM; PR & calibration; tests for determinism     | Error gallery + fix idea            | Confusion/PR/calibration plots  |
+| **M3**  | Transfer learning + **ablation**                     | ResNet18/MobileNetV3, freeze vs unfreeze | Train frozen head; optional last-block; compare      | Tune 1 hyperparam; **bootstrap CI** | F1 ↑ ≥5 pts; ablation w/ CI     |
+| **M4**  | Validation with **CIs & utility**; sealed test       | K-fold, bootstrap, thresholding          | Repeated CV; choose threshold by expected cost; test | **Validation Note**                 | CI + justified threshold + test |
+| **M5**  | Slicing, fix, **shift probe**                        | Slice metrics, ablations, fairness       | Slice report; targeted fix; shift set                | Update ablation; **risk memo**      | Slice gap ↓; no big regression  |
+| **M6**  | Explain, **deploy, load test**, present              | Grad-CAM, model cards, Gradio            | Grad-CAM; CLI+Gradio; latency/throughput             | Polish & release                    | App + model card + demo         |
 
 ---
 
-## 4) Mini‑project brief (half page)
+## 4) Mini-project brief (half page)
 
-**Scope:** Build a reproducible **binary or 3‑class** image classifier with a tiny local pipeline and demo. Recommended datasets (pick one):
+**Scope:** Build a reproducible **binary or 3-class** image classifier with a tiny local pipeline and demo. Choose one dataset:
 
-* **Hymenoptera (ants vs bees)** — tiny, ideal for CPU.
-* **CIFAR‑10 (3‑class subset)** — e.g., airplane/automobile/ship, downsample to ≤10k train images.
-* **Oxford‑IIIT Pet (binary subset)** — cat vs dog; downsample to ≤3k images.
+* **Hymenoptera (ants vs bees)** (torchvision tutorial) — ideal for CPU; \~400 train/val images.
+* **CIFAR-10 (3-class subset)** — e.g., airplane/automobile/ship; cap to ≤10k train images.
+* **Oxford-IIIT Pet (binary subset)** — cat vs dog; cap to ≤3k images.
 
-**Acceptance criteria (the “ritual”):**
+**Acceptance criteria (the ritual):**
 
-1. **Define metric & threshold** using a short cost matrix.
-2. **Split** deterministically (stratified); save split manifests.
-3. **Baseline**: HOG+Linear SVM (or majority) with confusion matrix & PR curve.
-4. **Improve**: transfer learning (ResNet‑18/MobileNetV3) with frozen backbone; show +Δ on validation.
-5. **Validate**: repeated CV on train; 95% CI; one final test run; no leakage.
-6. **Error analysis**: at least **two slices** (e.g., brightness quartiles), an ablation of one fix.
-7. **Explainability**: Grad‑CAM overlays for ≥16 images (balanced across classes and errors).
-8. **Simple app**: Gradio UI + CLI; CPU‑only; seeds fixed; instructions in `README.md`.
-9. **Communication**: `MODEL_CARD.md` (intended use, data, metrics with CI, limits, ethics), and a **3‑minute demo**.
+1. **Define metric & cost matrix** → declare an **acceptance threshold**.
+2. **Deterministic split** (stratified) → manifests stored.
+3. **Baseline**: HOG+Linear SVM (or majority) → confusion + PR + **calibration** (Brier, reliability plot).
+4. **Improve**: transfer learning (ResNet-18/MobileNetV3, frozen backbone) → +Δ on validation.
+5. **Validate**: light K-fold or repeated CV on train; **95% CIs** (bootstrap); choose threshold by **expected utility**; one sealed-test run.
+6. **Error analysis**: ≥2 slices (e.g., brightness & blur) + one targeted **fix** with an ablation table.
+7. **Explainability**: **Grad-CAM** overlays for ≥16 images (balanced across right/wrong).
+8. **Deploy**: **Gradio app** + **CLI**; **CPU load test** (images/s, median latency) and brief calibration check.
+9. **Communicate**: `MODEL_CARD.md` (intended use, data, metrics with CI, threshold & costs, limitations, known risks) and a **3-minute demo**.
 
 ---
 
 ## 5) Assessment & rubric (brief)
 
-* **Labs (M1–M5)** – 30 pts (6 pts each): completeness (3), correctness/repro (2), clarity of artifacts (1).
-* **Homework (M1–M6)** – 10 pts (≈1.6 each): on‑time, focused (≤60 min), clean commit history.
-* **Mini‑project (code & report)** – 35 pts: pipeline & reproducibility (10), modeling & validation quality (10), error analysis & fix (8), explainability & ethics (7).
-* **Demo (M6)** – 20 pts: concise story (5), live app + CLI (7), defend choices w/ evidence (5), timing & Q\&A (3).
-* **Ethics & limitations reflection** – 5 pts: concrete risks, failure modes, and boundaries of safe use.
+* **Labs (M1–M5)** – 30 pts (6 each): completeness (2), correctness & reproducibility (2), tests/plots & artifacts quality (2).
+* **Homework (M1–M6)** – 10 pts: clear, on-time, ≤60 min scope, integrates required plots/tables.
+* **Mini-project (code & report)** – 35 pts: pipeline & reproducibility (8), modeling & improvement (8), validation quality (**CIs & expected-utility thresholding**) (9), error analysis & robustness (6), explainability & ethics (4).
+* **Demo (M6)** – 20 pts: story & clarity (5), live app + CLI (7), **calibration & threshold defense** with numbers (5), timing/Q\&A (3).
+* **Ethics & limitations reflection** – 5 pts: concrete risks, failure modes, and safe-use boundaries.
 
-**Grading notes:** CI must accompany every reported metric; any leakage → −5 pts on project; no random seeds → −3 pts.
+> Deductions: any sealed-test reuse during development (−10), missing seeds or nondeterministic training (−5), absent calibration or CI where required (−3).
 
 ---
 
 ## 6) Tech stack & setup
 
-**Versions (pinned):**
+**Versions (pinned)**
+Python **3.11**; PyTorch **2.3** (CPU), Torchvision **0.18**; scikit-learn **1.4**; numpy **1.26**; pandas **2.2**; matplotlib **3.8**; Pillow **10**; scikit-image **0.22**; gradio **4.x**; pytorch-grad-cam **1.5**; **pytest 8**, **pytest-cov**, **pytest-xdist**; black **24**; ruff **0.5**; pre-commit **3.7**; typer **0.12**; rich **13**.
 
-* Python **3.11**; PyTorch **2.3** (CPU build), Torchvision **0.18**; scikit‑learn **1.4**; numpy **1.26**; pandas **2.2**; matplotlib **3.8**; Pillow **10**; scikit‑image **0.22**; gradio **4.x**; pytorch‑grad‑cam **1.5**; pytest **8**; black **24**; ruff **0.5**; pre‑commit **3.7**.
+**Quickstart links:** PyTorch/Torchvision, scikit-learn, Gradio, pytorch-grad-cam.
 
-**Quickstart links:** PyTorch & Torchvision (pytorch.org), scikit‑learn (scikit-learn.org), Gradio (gradio.app), pytorch‑grad‑cam (github.com/jacobgil/pytorch-grad-cam).
-
-**Repo scaffold (provided):**
+**Template notebook & repo scaffold**
 
 ```
 .
@@ -261,12 +265,12 @@ Steps:
 │  ├─ features.py        # HOG/color hist
 │  ├─ models.py          # head builder for ResNet18
 │  ├─ train.py           # train loop (seeded), early stop
-│  ├─ evaluate.py        # metrics, PR curve, CIs
+│  ├─ evaluate.py        # metrics, PR curve, CIs, calibration
 │  ├─ kfold.py           # repeated CV on train only
 │  ├─ explain.py         # Grad-CAM utilities
-│  ├─ predict.py         # CLI
+│  ├─ predict.py         # CLI (typer)
 │  └─ app.py             # Gradio UI
-├─ tests/                # autograder: split determinism, no leakage, metric shapes
+├─ tests/                # determinism, leakage, metrics, calibration, coverage
 ├─ reports/              # auto-generated plots/tables
 ├─ MODEL_CARD.md         # template
 ├─ README.md             # run instructions
@@ -274,52 +278,53 @@ Steps:
 └─ pyproject.toml        # black/ruff config
 ```
 
-**Repro recipe:**
-`python -m venv .venv && source .venv/bin/activate` (Win: `.\.venv\Scripts\activate`) → `pip install -r requirements.txt` → `python src/train.py --seed 2024 --epochs 5 --freeze true` → `python src/evaluate.py --use_test_once` → `python src/app.py`.
+**Repro recipe**
+`python -m venv .venv && source .venv/bin/activate` → `pip install -r requirements.txt` →
+`python src/train.py --seed 2024 --epochs 5 --freeze true` →
+`python src/evaluate.py --use_test_once --compute_ci --expected_cost "FN:5,FP:1"` →
+`python src/app.py` (then run `python -m src.predict path/to/img.jpg`).
 
-**GitHub Classroom:** starter tests check: (1) deterministic splits, (2) baseline metrics file exists, (3) model head has correct output size, (4) CV never touches test, (5) threshold stored, (6) slice report present, (7) app launches.
+**GitHub Classroom autograder checks**
+(1) deterministic splits; (2) baseline metrics file exists; (3) model head output size; (4) CV never touches test; (5) threshold persisted; (6) slice report present; (7) **calibration artifacts** present; (8) **bootstrap CI** computed; (9) app launches; (10) **load test script** runs.
 
 ---
 
 ## 7) Risks & mitigations
 
-* **Data leakage** (augments applied after seeing labels; test images in train):
-  *Mitigation*: saved manifest CSVs; test set read‑only; autograder asserts no test file appears elsewhere; transforms defined by split (train vs eval) not by label.
+* **Data leakage** (test in train; normalization fit on full data).
+  *Mitigation*: split manifests created **before** any stats; autograder checks no test path appears elsewhere; eval script reads test once.
 
-* **Overfitting** (tiny data):
-  *Mitigation*: frozen backbone, early stopping on val, small LR, limited epochs; report CI not just point estimate.
+* **Overfitting on tiny data**.
+  *Mitigation*: frozen backbone; early stopping; small LR; report **CIs** not just point estimates.
 
-* **Metric confusion** (accuracy vs PR‑AUC):
-  *Mitigation*: cost matrix exercise in M1–M2; choose threshold from PR; macro‑averaging by default.
+* **Metric confusion** (accuracy vs PR-AUC vs utility).
+  *Mitigation*: cost matrix exercise; **expected-utility thresholding**; macro-averaging by default.
 
-* **Environment drift**:
-  *Mitigation*: pinned versions; `requirements.txt`; seed function enforces `torch.use_deterministic_algorithms(True)`; all random sources seeded.
+* **Environment drift**.
+  *Mitigation*: pinned versions; seed function enforces deterministic algorithms; tests assert determinism.
 
-* **Compute limits** (CPU only):
-  *Mitigation*: tiny dataset; frozen features; capped epochs; downsampled CIFAR subset.
-
-* **Repo hygiene** (messy results):
-  *Mitigation*: fixed folder structure; pre‑commit hooks (black/ruff); single entry scripts for train/eval.
+* **Compute limits (CPU only)**.
+  *Mitigation*: tiny datasets; capped epochs; frozen features; optional downsampling.
 
 ---
 
 ## 8) Accessibility & ethics notes
 
-* **Dataset considerations**: avoid sensitive attributes; document sources/licensing in `data_card.md`; show class balance and potential spurious cues (e.g., background/lighting).
-* **Bias checks (group metrics)**: use **domain slices** (brightness/blur/crop) as proxies; report per‑slice precision/recall with support; if a slice underperforms, propose targeted mitigation.
-* **Disclosure of limitations**: model card must state: intended use, out‑of‑scope cases, expected failure modes (e.g., heavy motion blur), and operational **confidence threshold**; include CI and test‑only‑once policy.
-* **Accessibility**: plots use color‑blind friendly defaults; always include text labels; Gradio app supports keyboard navigation and alt‑text on example images.
+* **Datasets**: use small, permissively licensed sets; document in `data_card.md`; show class balance and potential spurious cues (backgrounds/lighting).
+* **Bias checks (group metrics)**: domain-based slices (brightness/blur/viewpoint); report per-slice precision/recall with support; note trade-offs when applying fixes.
+* **Limitations disclosure**: model card states intended use, out-of-scope cases (e.g., heavy motion blur or non-natural images), confidence threshold, **CI**, and test-only-once policy.
+* **Accessibility**: plots labeled; color-blind-safe palettes; Gradio app includes alt-text and keyboard navigation notes.
 
 ---
 
 ## 9) Stretch paths (optional)
 
-1. **Cross‑validation & ensembling**: 5× CV heads; average logits at inference; compare with bootstrap significance.
-2. **Explainability+**: Grad‑CAM++, **Integrated Gradients** for the head, or counterfactuals via simple occlusion sensitivity.
-3. **A/B experiment**: MobileNetV3 vs ResNet18 with identical data & seed; test for statistically significant difference; discuss throughput/latency trade‑offs.
+1. **Statistical comparison**: paired bootstrap for MobileNetV3 vs ResNet18; report p-value/CI of ΔF1.
+2. **Robustness sweep**: corruptions (brightness/blur/noise) with a small “robust augment” ablation; report robustness curves.
+3. **Interpretability+**: Grad-CAM++ vs Occlusion Sensitivity; discuss disagreements and implications for trust.
 
 ---
 
-### Summary of what students will really learn
+### Bottom line
 
-They’ll practice *decision‑making + verification + communication*: define the right **metric**, design sound **validation**, spot and reduce **errors** on important **slices**, **explain** and **document** results, and ship a tiny but trustworthy **demo**—all reproducibly, locally, and under version control.
+Assignments now emphasize **verification** (unit tests, **calibration**, **CIs**, **expected-utility thresholds**), **robustness** (slice + shift probe), and **operationalization** (CPU **load test** + Gradio app). Students may use AI assistants as they like—the assignments are designed so the only way to succeed is to **make correct, reproducible, well-justified work**.
