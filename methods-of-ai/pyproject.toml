@@ -3,7 +3,15 @@ name = "training-app"
 version = "0.1.0"
 description = "Methods of Deep Learning course scaffolding"
 authors = ["Your Name <you@example.com>"]
-packages = [{ include = "app" }]
+packages = [
+    { include = "common" },
+    { include = "lab1_tabular" },
+    { include = "lab2_vision" },
+    { include = "lab3_text" },
+    { include = "lab4_timeseries" },
+    { include = "lab5_recsys" },
+    { include = "lab6_generative" }
+]
 
 [tool.poetry.dependencies]
 python = "3.11.13"
