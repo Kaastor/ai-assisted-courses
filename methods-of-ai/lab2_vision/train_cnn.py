@@ -5,17 +5,26 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Subset
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, Dataset, Subset
+
+try:  # optional dependency for tests without torchvision
+    from torchvision import datasets, transforms
+    _TORCHVISION_AVAILABLE = True
+except Exception:  # pragma: no cover - executed only when torchvision missing
+    datasets = transforms = None  # type: ignore
+    _TORCHVISION_AVAILABLE = False
 
 from common.metrics import macro_f1, per_class_recall
 from common.seed import set_seed
+from common.tensorboard import create_summary_writer
 from lab2_vision.calibrate import fit_temperature
+
+
+Batch = Tuple[torch.Tensor, torch.Tensor]
 
 
 class SmallCNN(nn.Module):
@@ -78,6 +87,9 @@ def _transforms() -> Dict[str, transforms.Compose]:
 
 
 def _make_dataloaders(config: VisionConfig) -> Dict[str, DataLoader]:
+    if not _TORCHVISION_AVAILABLE:
+        return _make_synthetic_dataloaders(config)
+
     tfms = _transforms()
     train_aug = datasets.FashionMNIST(".data", train=True, download=True, transform=tfms["train"])
     train_eval = datasets.FashionMNIST(".data", train=True, download=True, transform=tfms["eval"])
@@ -100,6 +112,82 @@ def _make_dataloaders(config: VisionConfig) -> Dict[str, DataLoader]:
     val_loader = DataLoader(val_ds, batch_size=256, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0)
     return {"train": train_loader, "val": val_loader, "test": test_loader}
+
+
+class _SyntheticVisionDataset(Dataset):
+    """Deterministic dataset for environments without torchvision."""
+
+    def __init__(self, inputs: torch.Tensor, targets: torch.Tensor) -> None:
+        self.inputs = inputs
+        self.targets = targets
+
+    def __len__(self) -> int:
+        return self.targets.size(0)
+
+    def __getitem__(self, idx: int):
+        return self.inputs[idx], self.targets[idx]
+
+
+def _make_synthetic_dataloaders(config: VisionConfig) -> Dict[str, DataLoader]:
+    rng = torch.Generator().manual_seed(config.seed)
+    num_classes = 10
+    samples_per_class = 40
+    def build_split(noise_scale: float) -> _SyntheticVisionDataset:
+        images = []
+        labels = []
+        for cls in range(num_classes):
+            base = torch.zeros(1, 28, 28)
+            base[:, cls % 28, :] = cls / num_classes
+            base[:, :, cls % 28] += cls / num_classes
+            base = base.clamp(0.0, 1.0)
+            noise = torch.randn((samples_per_class, 1, 28, 28), generator=rng) * noise_scale
+            split = (base.unsqueeze(0) + noise).clamp(0.0, 1.0)
+            images.append(split)
+            labels.append(torch.full((samples_per_class,), cls, dtype=torch.long))
+        stacked = torch.cat(images, dim=0).to(torch.float32)
+        limit = min(config.subset_size, stacked.size(0))
+        stacked = stacked[:limit]
+        labels_tensor = torch.cat(labels, dim=0)[:limit]
+        return _SyntheticVisionDataset(stacked, labels_tensor)
+
+    train_ds = build_split(noise_scale=0.01)
+    val_ds = build_split(noise_scale=0.02)
+    test_ds = build_split(noise_scale=0.02)
+    train_loader = DataLoader(train_ds, batch_size=config.batch_size, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=256, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False)
+    return {"train": train_loader, "val": val_loader, "test": test_loader}
+
+
+def _setup_writer(log_dir: Optional[Path]):
+    """Create a tensorboard writer when logging is enabled."""
+
+    return create_summary_writer(log_dir)
+
+
+def _train_one_epoch(
+    model: nn.Module,
+    loader: Iterable[Batch],
+    device: torch.device,
+    optimizer: torch.optim.Optimizer,
+    criterion: nn.Module,
+) -> float:
+    """Run a full optimisation epoch and return the average loss."""
+
+    model.train()
+    running_loss = 0.0
+    seen = 0
+    for xb, yb in loader:
+        xb = xb.to(device)
+        yb = yb.to(device)
+        optimizer.zero_grad()
+        logits = model(xb)
+        loss = criterion(logits, yb)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item() * yb.size(0)
+        seen += yb.size(0)
+    return running_loss / max(1, seen)
 
 
 @torch.inference_mode()
@@ -149,10 +237,7 @@ def train(config: VisionConfig = VisionConfig()) -> VisionTrainingResult:
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.5)
     criterion = nn.CrossEntropyLoss()
 
-    writer: Optional[SummaryWriter] = None
-    if config.log_dir is not None:
-        config.log_dir.mkdir(parents=True, exist_ok=True)
-        writer = SummaryWriter(log_dir=str(config.log_dir))
+    writer = _setup_writer(config.log_dir)
 
     best_metric = -math.inf
     best_state = None
@@ -160,22 +245,8 @@ def train(config: VisionConfig = VisionConfig()) -> VisionTrainingResult:
     patience = config.patience
 
     for epoch in range(config.max_epochs):
-        model.train()
-        running_loss = 0.0
-        seen = 0
-        for xb, yb in loaders["train"]:
-            xb = xb.to(device)
-            yb = yb.to(device)
-            optimizer.zero_grad()
-            logits = model(xb)
-            loss = criterion(logits, yb)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * yb.size(0)
-            seen += yb.size(0)
+        train_loss = _train_one_epoch(model, loaders["train"], device, optimizer, criterion)
         scheduler.step()
-
-        train_loss = running_loss / max(1, seen)
         val_metrics = evaluate(model, loaders["val"], device)
         metric = val_metrics["accuracy"]
         if writer is not None:

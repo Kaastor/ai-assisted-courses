@@ -8,9 +8,9 @@ packages = [
     { include = "lab1_tabular" },
     { include = "lab2_vision" },
     { include = "lab3_text" },
-    { include = "lab4_timeseries" },
-    { include = "lab5_recsys" },
-    { include = "lab6_generative" }
+    { include = "lab4_transfer" },
+    { include = "lab5_reliability" },
+    { include = "lab6_packaging" }
 ]
 
 [tool.poetry.dependencies]

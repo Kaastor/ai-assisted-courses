@@ -10,7 +10,7 @@
 
 By the end, students can:
 
-* Recognize main DL **problem types** (vision, text, tabular, time‑series, generative, recommendation).
+* Recognize main DL **project stages** we practised (tabular, vision, text, transfer learning, reliability review, packaging).
 * Explain **pros/cons of DL** vs. classical ML (data/compute needs, latency, interpretability, maintenance).
 * **Choose appropriate methods** with trade‑off reasoning.
 * **Implement, test, debug, and validate** PyTorch models.
@@ -45,8 +45,8 @@ By the end, students can:
 
 ## 2) Six Labs — different domains/methods, ramping methodology
 
-> **Order:** Builds from fundamentals (tabular) → vision → text → time‑series → recommendation → generative.
-> **All labs** include: a working **starter code** baseline (students modify it), **unit tests**, CPU‑friendly hyperparameters, and **acceptance tests**.
+> **Order:** Builds from fundamentals (tabular) → vision → text → transfer learning → reliability → packaging/deployment.
+> **All labs** include: a working **starter code** baseline (students modify it), **unit tests**, CPU‑friendly hyperparameters, and **acceptance tests** focused on methodology.
 
 ---
 
@@ -591,522 +591,180 @@ if __name__=="__main__":
 
 ---
 
-### **Lab 4 — Time‑series forecasting with GRU (Electricity Load)**
+### **Lab 4 — Transfer learning and fine-tuning on CIFAR-10**
 
-**Purpose:** Proper **temporal splits**, sliding‑window datasets, naive baselines, and MAE/MAPE for forecasting.
+**Purpose:** Show why pretrained vision backbones accelerate training, how to fine-tune responsibly on CPU, and how to compare scratch vs. transfer runs using consistent logging practices.
 
-* **Problem & use cases:** Energy demand forecasting, sensor telemetry, capacity planning.
+* **Problem & use cases:** Small labelled image corpora; teams adapting ImageNet models to internal taxonomies; rapid prototyping without GPUs.
 
-* **Method taught:** **GRU sequence‑to‑one** next‑step forecaster with sliding windows.
-  **Alternatives:**
+* **Method taught:**
+  * Baseline: **Simple CNN trained from scratch** on a CIFAR-10 subset.
+  * Transfer: **ResNet18 feature extractor** with optionally frozen backbone and tuned head learning rates.
+  * Students toggle `freeze_backbone`, discriminative learning rates, and subset sizes to reason about speed/accuracy trade-offs.
 
-  * **Temporal CNN (1D dilated)**: parallelizable; strong for local patterns.
-  * **Classical naive/ARIMA**: strong baselines when seasonality dominates.
+* **Dataset:** **CIFAR-10** — MIT License via torchvision. We sample ≤5k images deterministically for CPU-speed training. ([CIFAR-10 dataset card][4])
 
-* **Dataset:** **Electricity Load Diagrams 2011–2014** (Portugal) — **CC BY 4.0** at UCI repository. We subselect **1 client** and **hourly resample** for CPU speed. ([UCI Machine Learning Repository][4])
+#### 60-minute intro
 
-#### 60‑minute intro
+* **Objectives:**
+  1. Contrast random-initialised vs. pretrained convergence curves.
+  2. Explain freezing, linear probing, and gradual unfreezing.
+  3. Demonstrate reproducible sweeps with TensorBoard and run cards.
+* **Key ideas:** feature reuse, data scarcity, domain shift failure modes, logging comparable metrics, monitoring overfitting.
+* **Live code:**
+  * Build `SimpleCNN` baseline (conv → ReLU → pool).
+  * Load torchvision `resnet18`, replace final layer, toggle `requires_grad`.
+  * Train both models for a few epochs; log accuracy/loss charts.
+* **Diagram:** `Image → [Augment] → {Scratch CNN | Pretrained Backbone + Head} → Logits → Softmax`.
 
-* **Objectives:** Make **temporal** train/val/test split; implement sliding windows; compare to **naive last‑value** baseline; avoid leakage from scalers.
-* **Key ideas:** Stationarity; scale only on **train**; blocked validation; MAPE pitfalls near zero; seasonality hints; coverage vs accuracy.
-* **Live code:** Window maker; GRU(32) → Linear; MAE/MAPE; compare to naive; plot predictions (students).
-* **Diagram:** Time axis windows: `[t−W…t−1] → y_t`; shift windows by stride.
-
-#### Full working example
+#### Starter code excerpt
 
 ```python
-# lab4_timeseries/train_gru.py
-import os, random, numpy as np, pandas as pd, torch
-from torch import nn
-from torch.utils.data import Dataset, DataLoader
-
-def set_seed(s=42):
-    random.seed(s); np.random.seed(s); os.environ["PYTHONHASHSEED"]=str(s)
-    torch.manual_seed(s); torch.use_deterministic_algorithms(True)
-
-class WindowDS(Dataset):
-    def __init__(self, series, W=24):
-        self.x=[]; self.y=[]
-        for i in range(W, len(series)):
-            self.x.append(series[i-W:i]); self.y.append(series[i])
-        self.x=torch.tensor(self.x, dtype=torch.float32).unsqueeze(-1) # [N,W,1]
-        self.y=torch.tensor(self.y, dtype=torch.float32)               # [N]
-    def __len__(self): return len(self.y)
-    def __getitem__(self,i): return self.x[i], self.y[i]
-
-class GRUForecaster(nn.Module):
-    def __init__(self, hid=32):
-        super().__init__()
-        self.rnn = nn.GRU(1, hid, batch_first=True)
-        self.fc = nn.Linear(hid, 1)
-    def forward(self, x):
-        _, h = self.rnn(x)      # [1,B,H]
-        return self.fc(h[-1]).squeeze(1)
-
-def mape(y,p): return (torch.abs((y-p).clamp_min(1e-6)/y.clamp_min(1.0))).mean().item()
-def mae(y,p):  return torch.mean(torch.abs(y-p)).item()
-
-if __name__=="__main__":
-    set_seed()
-    # Expect CSV "LD2011_2014.txt" pre-downloaded; we'll read one column
-    df = pd.read_csv("LD2011_2014.txt", sep=";", index_col=0, parse_dates=[0])
-    s = df.iloc[:,0].resample("1H").mean().dropna()  # pick client 0; hourly
-    # temporal split: first 70% train, next 15% val, last 15% test
-    n=len(s); tr=int(0.7*n); va=int(0.15*n)
-    s_train, s_val, s_test = s.iloc[:tr], s.iloc[tr:tr+va], s.iloc[tr+va:]
-    mu, sigma = s_train.mean(), s_train.std()
-    def norm(x): return (x-mu)/max(sigma,1e-6)
-    tr_ds = WindowDS(norm(s_train.values).astype(np.float32), W=24)
-    va_ds = WindowDS(norm(s_val.values).astype(np.float32), W=24)
-    te_ds = WindowDS(norm(s_test.values).astype(np.float32), W=24)
-    tr_ld = DataLoader(tr_ds, batch_size=128, shuffle=True, num_workers=0, drop_last=True)
-    va_ld = DataLoader(va_ds, batch_size=256, shuffle=False, num_workers=0)
-    te_ld = DataLoader(te_ds, batch_size=256, shuffle=False, num_workers=0)
-
-    model = GRUForecaster(32)
-    opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    crit = nn.MSELoss()
-    for ep in range(6):
-        model.train(); tot=0
-        for xb,yb in tr_ld:
-            opt.zero_grad(); loss=crit(model(xb), yb); loss.backward(); opt.step(); tot+=loss.item()*yb.size(0)
-        # quick val
-        model.eval(); pred=[]; targ=[]
-        with torch.no_grad():
-            for xb,yb in va_ld: pred+=model(xb).tolist(); targ+=yb.tolist()
-        yp = torch.tensor(pred); yt = torch.tensor(targ)
-        print(f"ep{ep}: val MAE={mae(yt,yp):.3f}")
-    # test vs naive
-    with torch.no_grad():
-        pred=[]; targ=[]
-        for xb,yb in te_ld: pred+=model(xb).tolist(); targ+=yb.tolist()
-    yp=torch.tensor(pred); yt=torch.tensor(targ)
-    mae_model=mae(yt,yp)
-    # naive: last value
-    naive=[]
-    for xb,_ in te_ld:
-        naive += xb[:,-1,0].tolist()
-    mae_naive=mae(yt, torch.tensor(naive))
-    print({"test_mae":mae_model, "naive_mae":mae_naive, "improve_pct":(mae_naive-mae_model)/mae_naive*100})
+# lab4_transfer/train_transfer.py
+config = TransferConfig(subset_size=4000, freeze_backbone=True, use_pretrained=True)
+result = train(config)
+print(result.transfer_metrics)
 ```
 
-* **Metrics & targets:** **MAE** and **MAPE**; **Acceptance:** model **beats naive** MAE by **≥5%** on test.
+Students extend this by timing epochs, running ablations (frozen vs. unfrozen), and summarising findings in a short report.
 
-* **Methodology focus:** **Temporal split**, avoiding future leakage, standardization on **train only**, comparing to naive; error analysis by **hour‑of‑day** slice.
+* **Metrics & targets:**
+  * Report **top-1 accuracy** and **cross-entropy loss** for scratch & transfer runs.
+  * Acceptance: transfer run must **beat scratch accuracy by ≥5 pts** on the held-out subset and include logged curves or tables.
+
+* **Methodology focus:** experimental fairness (same splits/seeds), resource-aware choices (download cost vs. accuracy), structured logging, and interpreting TensorBoard plots.
 
 * **Why this over that?**
 
-  * GRU is simple & effective for short‑horizon forecasting.
-  * vs. Temporal CNN: faster training & receptive‑field control; choose when parallelism matters.
-  * vs. ARIMA: great for linear seasonality but brittle with regime changes; DL handles nonlinearities.
+| Method | When it shines | Limitations |
+| --- | --- | --- |
+| Scratch CNN | Full control, no external weights | Needs more data/epochs; slower convergence |
+| Frozen backbone + linear head | Tiny datasets, minimal compute | Fails under severe domain shift |
+| Partial fine-tuning | Moderate data, higher accuracy target | Risk of overfitting; LR tuning required |
 
-* **Failure modes**
-
-  * Model worse than naive → window too small / learning rate too high; try W=48 or reduce LR.
-  * Instability across runs → check seeds & `num_workers=0`.
+* **Failure modes & fixes**
+  * Transfer underperforms scratch → domain mismatch or head LR too high; try smaller LR or unfreeze last block.
+  * Scratch stagnates → increase epochs/capacity or reduce augmentation.
+  * Both overfit quickly → collect more data or augment; double-check subset size.
 
 * **Starter structure & tests**
 
-  ```
-  lab4_timeseries/
-  ├─ train_gru.py
-  └─ tests/test_window.py
-  ```
-
-  ```python
-  def test_window_shapes():
-      import torch, numpy as np
-      from lab4_timeseries.train_gru import WindowDS
-      ds=WindowDS(np.arange(30,dtype=np.float32), W=5)
-      x,y=ds[0]; assert x.shape==(5,1) and y.ndim==0
-  ```
-
-**Comparison table — Lab 4**
-
-| Method        | When it shines                     | When it fails          | Data needs    | Inference cost | Interpretability | Typical metrics |
-| ------------- | ---------------------------------- | ---------------------- | ------------- | -------------- | ---------------- | --------------- |
-| GRU next‑step | Short‑horizon sequences            | Very long dependencies | 1k–100k steps | Very low       | Low              | MAE, MAPE       |
-| Temporal CNN  | Parallelism, fixed receptive field | Irregular sampling     | 10k–1M steps  | Low            | Low              | MAE, sMAPE      |
-| ARIMA/ETS     | Clear seasonality, linear          | Nonlinear/volatile     | 100+ steps    | Very low       | Medium           | MAE, MASE       |
-
----
-
-### **Lab 5 — Recommendations with neural matrix factorization (MovieLens)**
-
-**Purpose:** Build an implicit‑feedback recommender (user/item **embeddings** + dot product), evaluate with **Precision\@K/Recall\@K**, and learn timeline‑aware splits.
-
-* **Problem & use cases:** Personalized ranking: products, content, courses, news.
-
-* **Method taught:** **Neural MF (dot‑product)** with negative sampling; train on implicit positives.
-  **Alternatives:**
-
-  * Item‑item **nearest neighbors**: strong cold‑start baseline; fast to deploy.
-  * **BPR loss** with pairwise ranking: optimizes ranking metrics more directly.
-
-* **Dataset:** **MovieLens 100K** (stable benchmark). **Usage license** in README allows **research use**, requires **acknowledgement**, disallows **commercial use**; redistribution requires permission. Students must download from GroupLens. ([GroupLens][5])
-
-> *(If availability is a concern, the “ml‑latest‑small” dataset has similar terms; also research‑oriented.)* ([GroupLens][6])
-
-#### 60‑minute intro
-
-* **Objectives:** Proper **user‑level** splits (leave‑last‑N per user); implement negative sampling; compute P\@K/R\@K.
-* **Key ideas:** Implicit vs explicit; popularity bias; cold‑start; train/test leakage (don’t sample negatives from future).
-* **Live code:** Parse `u.data`; build train/val/test by user; embeddings (64‑dim); BCEWithLogits with negatives; top‑K eval.
-* **Diagram:** Users & Items mapped to points; **score = ⟨u, v⟩**; rank items by score.
-
-#### Full working example (condensed)
-
-```python
-# lab5_recsys/train_mf.py
-import os, random, numpy as np, pandas as pd, torch
-from torch import nn
-from collections import defaultdict
-
-def set_seed(s=42):
-    random.seed(s); np.random.seed(s); os.environ["PYTHONHASHSEED"]=str(s)
-    torch.manual_seed(s); torch.use_deterministic_algorithms(True)
-
-class MF(nn.Module):
-    def __init__(self, n_users, n_items, d=64):
-        super().__init__()
-        self.U = nn.Embedding(n_users, d); self.I = nn.Embedding(n_items, d)
-        nn.init.normal_(self.U.weight, std=0.01); nn.init.normal_(self.I.weight, std=0.01)
-    def forward(self, u, i): return (self.U(u)*self.I(i)).sum(1)
-
-def split_leave_last(df, n_last=1):
-    df = df.sort_values(["user","time"])
-    tr=[]; va=[]; te=[]
-    for u,g in df.groupby("user"):
-        if len(g)<=2: continue
-        te.append(g.iloc[-1]); va.append(g.iloc[-2]); tr.append(g.iloc[:-2])
-    return pd.concat(tr), pd.DataFrame(va), pd.DataFrame(te)
-
-def sample_batch(pos, n_items, neg_ratio=3, bs=2048):
-    # pos: DataFrame with (user,item)
-    for i in range(0, len(pos), bs):
-        b = pos.iloc[i:i+bs]
-        u = torch.tensor(b["user"].values, dtype=torch.long)
-        pi = torch.tensor(b["item"].values, dtype=torch.long)
-        ni = torch.randint(0, n_items, (len(b)*neg_ratio,))
-        nu = u.repeat_interleave(neg_ratio)
-        yield u, pi, nu, ni
-
-def precision_recall_at_k(model, inter_by_user, k=10, n_items=1682):
-    model.eval(); P=[]; R=[]
-    all_items = torch.arange(n_items)
-    with torch.no_grad():
-        for u, pos_items in inter_by_user.items():
-            u_t = torch.tensor([u]*n_items)
-            scores = model(u_t, all_items)
-            topk = torch.topk(scores, k).indices.cpu().numpy().tolist()
-            hits = len(set(topk) & pos_items)
-            P.append(hits/k); R.append(hits/max(1,len(pos_items)))
-    return float(np.mean(P)), float(np.mean(R))
-
-if __name__=="__main__":
-    set_seed()
-    # Expect ml-100k u.data (tab-separated: user item rating timestamp)
-    df = pd.read_csv("u.data", sep="\t", names=["user","item","rating","time"])
-    # implicit positives: rating >= 4
-    df = df[df["rating"]>=4][["user","item","time"]]
-    n_users = df["user"].max()+1; n_items=df["item"].max()+1
-    tr, va, te = split_leave_last(df)
-    model = MF(n_users, n_items, d=64)
-    opt = torch.optim.AdamW(model.parameters(), lr=5e-3, weight_decay=1e-5)
-    crit = nn.BCEWithLogitsLoss()
-    for ep in range(5):
-        model.train()
-        for u,pi,nu,ni in sample_batch(tr, n_items):
-            opt.zero_grad()
-            y_pos = torch.ones(len(pi)); y_neg = torch.zeros(len(ni))
-            loss = crit(model(u,pi), y_pos) + crit(model(nu,ni), y_neg)
-            loss.backward(); opt.step()
-        # quick val P@10/R@10
-        inter_by_user = defaultdict(set)
-        for _,r in va.iterrows(): inter_by_user[int(r.user)].add(int(r.item))
-        P,R = precision_recall_at_k(model, inter_by_user, k=10, n_items=n_items)
-        print(f"ep{ep} val P@10={P:.3f} R@10={R:.3f}")
-    # test
-    inter_by_user = defaultdict(set)
-    for _,r in te.iterrows(): inter_by_user[int(r.user)].add(int(r.item))
-    P,R = precision_recall_at_k(model, inter_by_user, k=10, n_items=n_items)
-    print("test", {"P@10":P, "R@10":R})
+```
+lab4_transfer/
+├─ train_transfer.py
+├─ README.md
+└─ tests/
+   └─ test_training.py  # dataloader shapes, training loop smoke tests
 ```
 
-* **Metrics & targets:** **Precision\@10** and **Recall\@10** across users. **Acceptance:** Recall\@10 ≥ **0.10** and Precision\@10 ≥ **0.07** (achievable with 5 epochs on CPU).
+---
+### **Lab 5 — Reliability, calibration, and targeted error analysis**
 
-* **Methodology focus:** **User‑timeline splits**, **negative sampling**, popularity baseline, cold‑start discussion; **responsible AI** (filter bubbles, fairness).
+**Purpose:** Teach students how to audit trained models, quantify uncertainty, and communicate risks before deployment.
 
-* **Why this over that?**
+* **Problem & use cases:** Post-training validation for tabular, vision, or text models; fairness reviews; compliance dashboards.
 
-  * Neural MF is simple, fast, and strong; embeddings reusable.
-  * vs. Item‑item KNN: transparent and trivial to ship; weaker personalization.
-  * vs. BPR: better ranking optimization but slightly more complex sampling.
+* **Method taught:** Assemble a reliability report by loading saved logits, applying calibration, computing slice metrics, and documenting findings. No new model is trained—the focus is on **analysis skills**.
 
-* **Common failure modes**
+* **Data inputs:** Students reuse checkpoints from Labs 1–4. Provided utilities expect CSV/NPZ exports of logits, labels, and optional slice annotations (e.g., feature buckets, demographic fields).
 
-  * All zeros at eval → indexing mismatch (off‑by‑one); confirm max IDs.
-  * Model predicts popular items only → increase neg\_ratio or add weight decay.
+#### 60-minute intro
+
+* **Objectives:**
+  1. Generate calibrated probabilities (temperature scaling, isotonic as extension).
+  2. Compute aggregate metrics (accuracy/F1/ROC-AUC, Expected Calibration Error, Brier score).
+  3. Build slice tables and targeted perturbations (e.g., add negation, swap sensitive terms).
+* **Key ideas:** Reliability ≠ accuracy; calibration vs. discrimination; subgroup harms; communicating uncertainty.
+* **Live code:**
+  * Load logits → sigmoid → metrics.
+  * Create slices by attribute (`age_bucket`, `message_length`).
+  * Plot calibration curve + reliability diagram (students extend with Matplotlib).
+* **Diagram:** `Predictions → [Calibrate] → Metrics → Slices → Report`.
+
+* **Metrics & targets:**
+  * Acceptance: produce a JSON/Markdown report containing overall metrics, slice metrics for ≥2 attributes (with ≥10 samples each), calibration curve data, and remediation notes.
+  * Tests assert metric helpers (precision/recall/ECE) and slice filtering behave correctly.
+
+* **Methodology focus:** measurement discipline, bias/ethics conversations, interpreting calibration, writing reproducible analyses (scripts + saved artefacts).
+
+* **Failure modes & fixes**
+  * High ECE → consider temperature tuning or Platt scaling; revisit data imbalance.
+  * Slice instability (tiny sample) → aggregate buckets or collect more data; warn stakeholders.
+  * Perturbation drastically changes predictions → log as risk; explore adversarial training or data augmentation.
 
 * **Starter structure & tests**
 
-  ```
-  lab5_recsys/
-  ├─ train_mf.py
-  └─ tests/test_forward.py
-  ```
-
-  ```python
-  def test_score_shape():
-      from lab5_recsys.train_mf import MF
-      import torch; m=MF(10,20,8)
-      u=torch.tensor([0,1,2]); i=torch.tensor([1,3,5])
-      s=m(u,i); assert s.shape==(3,)
-  ```
-
-**Comparison table — Lab 5**
-
-| Method                  | When it shines                  | When it fails             | Data needs          | Inference cost | Interpretability | Typical metrics |
-| ----------------------- | ------------------------------- | ------------------------- | ------------------- | -------------- | ---------------- | --------------- |
-| Neural MF (dot‑product) | Warm users/items; implicit data | Extreme cold‑start        | 10k–1M interactions | Very low       | Low              | P\@K, R\@K      |
-| Item‑item KNN           | Simplicity & transparency       | Personalization depth     | 1k–1M               | Low            | Medium           | P\@K            |
-| BPR (pairwise)          | Ranking quality                 | Implementation complexity | 50k–10M             | Low–Med        | Low              | MAP, NDCG       |
-
----
-
-### **Lab 6 — Generative modeling with a Variational Autoencoder (VAE) on Fashion‑MNIST**
-
-**Purpose:** Learn representation learning & generation; practice **ELBO**, **KL annealing**, and **anomaly detection** via reconstruction error.
-
-* **Problem & use cases:** Image generation, denoising, anomaly detection (manufacturing).
-
-* **Method taught:** **VAE (MLP)** on 28×28 images; CPU‑friendly.
-  **Alternatives:**
-
-  * **Denoising autoencoder:** simpler, but no generative sampling.
-  * **Diffusion models:** state‑of‑the‑art generation, but heavy compute.
-
-* **Dataset:** **Fashion‑MNIST (MIT License)** via torchvision. ([GitHub][2])
-
-#### 60‑minute intro
-
-* **Objectives:** Implement VAE with reparameterization; monitor **recon vs KL**; sample images; simple anomaly scores.
-* **Key ideas:** ELBO = Recon + KL; **β‑VAE** (trade‑off disentanglement vs fidelity); KL warm‑up; stability tricks.
-* **Live code:** Encoder/decoder MLP; train few epochs; save sample grid; anomaly score on one class as “out‑of‑class”.
-* **Diagram:** Input x → **Encoder** (μ, logσ²) → **reparam** z → **Decoder** → x̂; backprop via reparameterization trick.
-
-#### Full working example
-
-```python
-# lab6_generative/train_vae.py
-import os, random, numpy as np, torch
-from torch import nn
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms, utils
-
-def set_seed(s=42):
-    random.seed(s); np.random.seed(s); os.environ["PYTHONHASHSEED"]=str(s)
-    torch.manual_seed(s); torch.use_deterministic_algorithms(True)
-
-class VAE(nn.Module):
-    def __init__(self, z=16):
-        super().__init__()
-        self.enc = nn.Sequential(nn.Flatten(), nn.Linear(28*28,256), nn.ReLU(), nn.Linear(256,128), nn.ReLU())
-        self.mu = nn.Linear(128,z); self.logvar = nn.Linear(128,z)
-        self.dec = nn.Sequential(nn.Linear(z,128), nn.ReLU(), nn.Linear(128,256), nn.ReLU(), nn.Linear(256,28*28), nn.Sigmoid())
-    def forward(self, x, beta=1.0):
-        h = self.enc(x); mu, logv = self.mu(h), self.logvar(h)
-        std = torch.exp(0.5*logv)
-        eps = torch.randn_like(std)
-        z = mu + eps*std
-        xrec = self.dec(z).view(-1,1,28,28)
-        # losses
-        recon = nn.functional.binary_cross_entropy(xrec, x, reduction='sum')/x.size(0)
-        kl = -0.5*torch.sum(1 + logv - mu.pow(2) - logv.exp())/x.size(0)
-        return xrec, recon + beta*kl, recon.item(), kl.item()
-
-if __name__=="__main__":
-    set_seed()
-    tfm = transforms.ToTensor()
-    tr = datasets.FashionMNIST(".data", train=True, download=True, transform=tfm)
-    te = datasets.FashionMNIST(".data", train=False, download=True, transform=tfm)
-    # CPU-friendly subset
-    tr = Subset(tr, list(range(10000)))
-    tr_ld = DataLoader(tr, batch_size=128, shuffle=True, num_workers=0, drop_last=True)
-    model = VAE(z=16); opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-    for ep in range(5):
-        model.train(); tot=0; rsum=0; ksum=0
-        beta = min(1.0, ep/3)  # KL warm-up
-        for xb,yb in tr_ld:
-            opt.zero_grad(); _, loss, recon, kl = model(xb, beta=beta); loss.backward(); opt.step()
-            tot+=loss.item(); rsum+=recon; ksum+=kl
-        print(f"ep{ep}: loss {tot/len(tr_ld):.2f} recon {rsum/len(tr_ld):.2f} kl {ksum/len(tr_ld):.2f}")
-    # sample grid
-    with torch.no_grad():
-        z = torch.randn(64,16)
-        imgs = model.dec(z).view(-1,1,28,28)
-        utils.save_image(imgs, "samples.png", nrow=8)
-        print("saved samples.png")
+```
+lab5_reliability/
+├─ analyze.py         # high-level pipeline
+├─ metrics.py         # accuracy, calibration, Brier
+├─ slices.py          # slice evaluation helpers
+└─ tests/
+   ├─ test_metrics.py
+   └─ test_slices.py
 ```
 
-* **Metrics & targets:** Track **ELBO**, Recon, KL; visually inspect samples. **Acceptance:** Train loss drops ≥20% from epoch 0; produce **samples.png**.
-
-* **Methodology focus:** Representation learning; β‑VAE trade‑offs; basic **anomaly detection** via reconstruction error; discuss **misuse risks** (deepfakes).
-
-* **Why this over that?**
-
-  * VAE gives a **probabilistic latent space** with sampling & interpolation; lightweight on CPU.
-  * vs. Denoising autoencoder: simpler, but no explicit generative model;
-  * vs. Diffusion: higher fidelity but heavy compute and tuning.
-
-* **Common failure modes**
-
-  * All gray samples → decoder saturation; reduce LR, increase epochs slightly.
-  * KL collapse → use **KL warm‑up** or **β<1** early.
-
-* **Starter structure & test**
-
-  ```
-  lab6_generative/
-  ├─ train_vae.py
-  └─ tests/test_shapes.py
-  ```
-
-  ```python
-  def test_vae_shapes():
-      from lab6_generative.train_vae import VAE
-      import torch
-      m=VAE(z=8); x=torch.rand(4,1,28,28)
-      xr, loss, r, k = m(x, beta=1.0)
-      assert xr.shape==(4,1,28,28)
-  ```
-
-**Comparison table — Lab 6**
-
-| Method       | When it shines                            | When it fails                | Data needs | Inference cost | Interpretability          | Typical metrics     |
-| ------------ | ----------------------------------------- | ---------------------------- | ---------- | -------------- | ------------------------- | ------------------- |
-| VAE          | Fast generative modeling; anomaly scoring | Sharpness & fidelity limited | 10k–100k   | Low            | Medium (latent traversal) | ELBO                |
-| Denoising AE | Denoising/compression                     | No true generative sampling  | 10k–100k   | Very low       | Low                       | Recon loss          |
-| Diffusion    | Photorealistic gen                        | Heavy compute                | 100k+      | High           | Low                       | FID (not used here) |
-
 ---
+### **Lab 6 — Packaging, benchmarking, and deployment readiness**
 
-## 3) Environment & tooling (poetry, modules, logging, tracking, version control)
+**Purpose:** Convert a trained PyTorch model into an inference-ready artefact, measure latency, and reason about deployment constraints.
 
-**Project layout (reused across labs)**
+* **Problem & use cases:** Shipping models to production services, mobile/edge deployments, reproducible handoffs between research and engineering teams.
+
+* **Method taught:**
+  * Export to **TorchScript** (trace vs. script) with deterministic sample inputs.
+  * Validate tensor shapes/dtypes before batching requests.
+  * Benchmark latency on CPU with warmup + timed loops; report mean/p95/throughput.
+  * Optional extension: experiment with quantization or mixed precision.
+
+* **Inputs:** Students reuse the best-performing checkpoints (e.g., Lab 4 transfer model). Utilities accept a `nn.Module` instance plus representative batches.
+
+#### 60-minute intro
+
+* **Objectives:**
+  1. Explain why scripting/tracing is required for production (language-agnostic runtimes).
+  2. Demonstrate safety checks (input validation, max batch size, error handling).
+  3. Measure latency vs. batch size; discuss throughput/latency trade-offs and SLA planning.
+* **Key ideas:** Serialization formats, determinism, CPU affinity, quantization basics, monitoring outputs post-export.
+* **Live code:**
+  * Script baseline model; save to `artifacts/model.pt`.
+  * Load TorchScript module; compare outputs with original.
+  * Run `benchmark_model` on CPU; capture metrics in Markdown/CSV.
+* **Diagram:** `Model → [Export] → TorchScript artefact → [Load in runtime] → Predict`.
+
+* **Acceptance tasks:**
+  * Provide TorchScript artefact + parity test (max absolute diff ≤1e-3).
+  * Record latency report (mean/p95, throughput) for at least two batch sizes.
+  * Include input validation in inference wrapper with unit tests covering shape/dtype errors.
+
+* **Methodology focus:** reproducible deployment steps, defensive programming, communicating performance constraints, preparing for infra collaboration.
+
+* **Starter structure & tests**
 
 ```
-dl-methods/
-├─ pyproject.toml
-├─ common/
-│  ├─ seed.py            # set_seed(), deterministic flags
-│  ├─ metrics.py         # accuracy, F1, confusion, ECE
-│  └─ viz.py             # optional plotting helpers
-├─ lab{1..6}_.../        # each lab as a module
-└─ scripts/              # small CLIs (e.g., download datasets)
+lab6_packaging/
+├─ package.py         # export, validation, benchmarking helpers
+├─ README.md
+└─ tests/
+   └─ test_package.py
 ```
 
-**Poetry**
-
-* `poetry init` → add deps: `torch`, `torchvision` (for labs 2/6), `pandas`, `scikit-learn`, `tensorboard`, `matplotlib` (for local plots).
-* Lock & sync: `poetry lock && poetry install`.
-* Run: `poetry run python lab2_vision/train_cnn.py`.
-
-**Modules over notebooks**
-
-* Benefits: import hygiene, **unit tests**, reproducible runs, smaller diffs.
-* Provide **CLI flags** for batch size/epochs so TAs can test quickly.
-
-**Logging**
-
-* TensorBoard: `from torch.utils.tensorboard import SummaryWriter` → log scalars: loss/metrics each epoch.
-* Save `runs/labX_*` and commit only **small** sample logs, not full runs.
-
-**Experiment tracking tips**
-
-* Keep a **run card** (YAML/Markdown) with: dataset version, seed, hyperparams, metrics, best checkpoint path.
-* Name runs with a schema: `lab2_cnn_bs128_lr1e-3_wd1e-4_seed42`.
-
-**Version control workflow**
-
-* Branch per lab: `feat/lab3-thresholding`.
-* PR template: **What changed**, **Why**, **How to test**, **Risks**.
-* Use **tags** `lab1-v1.0` for submissions; include `requirements.txt` export for reproducibility (`poetry export`).
-
-**Determinism checklist**
-
-* `set_seed(42)` for Python, NumPy, PyTorch.
-* `torch.use_deterministic_algorithms(True)` (note: if some ops aren’t deterministic, PyTorch will warn).
-* `DataLoader(num_workers=0, shuffle=True, drop_last=True)`.
-* Log package versions + OS info.
-
-**Compute notes (CPU‑only)**
-
-* Use **subsets** (e.g., 10–12k images) and **small models**.
-* Batch sizes 64–256; AdamW lr 1e‑3; weight decay 1e‑4; 5–6 epochs.
-* Prefer **EmbeddingBag** for text to avoid padding overhead.
-* For time‑series, use small window (24–48) and hidden size (32).
-
-**Ethics & reliability**
-
-* Each lab: add a “**Risk & Bias Note**” section in README (e.g., Adult dataset demographic bias; recommender filter bubbles; generative misuse).
-* Include **calibration** plots, **slice‑based** metrics (by group/length/hour).
-* Keep data privacy in mind (no re‑sharing restricted datasets; follow dataset licenses).
-
 ---
-
-## 4) Capstone reflection checklist (tie labs → course goals)
-
-Use this checklist to prepare your final submission. Check each item only if you have evidence (plots, metrics, diffs, or code pointers).
-
-**Problem types**
-
-* [ ] I can match each domain (vision, text, tabular, time‑series, recommendation, generative) to an appropriate PyTorch method we built.
-* [ ] For a new scenario, I can identify if DL fits and **why** (vs classical).
-
-**Pros/cons of DL**
-
-* [ ] I can state DL trade‑offs: **data & compute needs**, **latency**, **maintenance debt**, **interpretability**.
-* [ ] I know when a **simpler baseline** is the right choice.
-
-**Method choice & trade‑offs**
-
-* [ ] I can justify **method A vs B** using constraints (data size, latency, interpretability, maintenance).
-* [ ] I can set **sensible defaults** (batch size, LR/decay, epochs, schedulers) and explain tuning steps.
-
-**Implement / test / debug**
-
-* [ ] I can implement a training loop with clean separation: data, model, optimizer, scheduler, metrics.
-* [ ] I can write **unit tests** (shape checks, **overfit‑one‑batch**) and interpret failures.
-* [ ] I can perform **error analysis**: confusion matrices, per‑class metrics, calibration, and **slice‑based** checks.
-
-**Data work**
-
-* [ ] I can build correct **input pipelines** per modality and prevent **leakage** (temporal/user splits, train‑only transforms).
-* [ ] I can choose **metrics** appropriate to the task (AUC/F1, MAE/MAPE, P\@K/R\@K, ELBO).
-* [ ] I can track experiments reproducibly (seeds, logs, run cards).
-
-**Ethics & reliability**
-
-* [ ] I can identify bias/harms per lab and propose mitigations (e.g., thresholding by group, calibrated scores).
-* [ ] I respect **dataset licenses** & privacy constraints.
-
 ---
 
 ## Dataset links & licenses (for quick reference)
 
-* **Fashion‑MNIST** — MIT License (GitHub repository). ([GitHub][2])
 * **UCI Adult (Census Income)** — Creative Commons **CC BY 4.0** (UCI page). ([UCI Machine Learning Repository][1])
+* **Fashion‑MNIST** — MIT License (GitHub repository). ([GitHub][2])
 * **SMS Spam Collection** — Creative Commons **CC BY 4.0** (UCI page). ([UCI Machine Learning Repository][3])
-* **Electricity Load Diagrams 2011–2014** — Creative Commons **CC BY 4.0** (UCI page). ([UCI Machine Learning Repository][4])
-* **MovieLens 100K** — research use license; acknowledgement required; no commercial use; redistribution requires permission (README). ([GroupLens][5])
+* **CIFAR-10** — MIT License; distributed via torchvision datasets. ([CIFAR-10 dataset card][4])
 
 ---
 
 ## Why students still learn even with AI assistants
 
 * **Acceptance tests** require *understanding* (e.g., beat naive baselines; calibration ECE thresholds; slice‑based metrics).
-* **Structured modifications** (threshold tuning, early stopping, KL warm‑up, negative sampling) force contact with *core ideas*, not just code generation.
+* **Structured modifications** (threshold tuning, transfer vs. scratch ablations, reliability audits, TorchScript exports) force contact with *core ideas*, not just code generation.
 * **Error analysis writeups** require students to explain *why* a change helped/hurt, with logs and plots.
 * AI can help draft code, but **only careful debugging & evaluation** passes the tests.
 
@@ -1126,9 +784,9 @@ Use this checklist to prepare your final submission. Check each item only if you
 * **Lab 1 (Adult):** ROC‑AUC ≥ 0.88, ECE ≤ 0.08, unit tests pass.
 * **Lab 2 (Vision):** acc ≥ 0.85, worst‑class recall ≥ 0.75, overfit‑one‑batch test passes.
 * **Lab 3 (Text):** Macro‑F1 ≥ 0.90, vocab size bounds, shape tests pass.
-* **Lab 4 (TS):** MAE improves ≥5% over naive on test; window test passes.
-* **Lab 5 (RecSys):** P\@10 ≥ 0.07, R\@10 ≥ 0.10, forward shape test passes.
-* **Lab 6 (VAE):** Loss ↓ by ≥20% from epoch 0, samples.png created, shape test passes.
+* **Lab 4 (Transfer):** Transfer run beats scratch accuracy by ≥5 pts on held-out subset; comparison logged.
+* **Lab 5 (Reliability):** Report includes overall metrics, ≥2 slice tables (≥10 samples each), and calibration curve data.
+* **Lab 6 (Packaging):** TorchScript parity test (≤1e-3 diff) and latency report (mean/p95, throughput) recorded.
 
 ---
 
@@ -1137,6 +795,4 @@ Use this checklist to prepare your final submission. Check each item only if you
 [1]: https://archive.ics.uci.edu/dataset/2/adult?utm_source=chatgpt.com "Adult - UCI Machine Learning Repository"
 [2]: https://github.com/zalandoresearch/fashion-mnist "GitHub - zalandoresearch/fashion-mnist: A MNIST-like fashion product database. Benchmark"
 [3]: https://archive.ics.uci.edu/dataset/228/sms%2Bspam%2Bcollection?utm_source=chatgpt.com "SMS Spam Collection"
-[4]: https://archive.ics.uci.edu/ml/datasets/electricityloaddiagrams20112014?utm_source=chatgpt.com "ElectricityLoadDiagrams20112014"
-[5]: https://files.grouplens.org/datasets/movielens/ml-100k-README.txt "files.grouplens.org"
-[6]: https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html "files.grouplens.org"
+[4]: https://www.cs.toronto.edu/~kriz/cifar.html "CIFAR-10 dataset"

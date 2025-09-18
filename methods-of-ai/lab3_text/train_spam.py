@@ -17,11 +17,11 @@ from sklearn.metrics import precision_recall_curve
 from sklearn.model_selection import train_test_split
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
 
 from common.metrics import binary_classification_metrics, expected_calibration_error
 from common.seed import set_seed
 from common.viz import plot_pr_curve
+from common.tensorboard import create_summary_writer
 from lab3_text.vocab import Vocab, build_char_vocab, build_word_vocab
 
 DATA_DIR = Path(".data") / "sms_spam"
@@ -122,6 +122,9 @@ def collate_batch(batch: Iterable[Tuple[torch.Tensor, torch.Tensor, torch.Tensor
     return word_tensor, word_offsets, char_tensor, char_offsets, label_tensor
 
 
+Batch = Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+
+
 class HybridBagModel(nn.Module):
     """EmbeddingBag-based classifier with character fallback."""
 
@@ -202,6 +205,40 @@ def prepare_loaders(config: TrainingConfig) -> Tuple[DataLoader, DataLoader, Dat
     return train_loader, val_loader, test_loader, metadata, pos_weight
 
 
+def _setup_writer(log_dir: Optional[Path]):
+    """Create a tensorboard writer when a log directory is provided."""
+
+    return create_summary_writer(log_dir)
+
+
+def _train_one_epoch(
+    model: nn.Module,
+    loader: Iterable[Batch],
+    device: torch.device,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: nn.Module,
+) -> float:
+    """Iterate over the training loader once and return the average loss."""
+
+    model.train()
+    running_loss = 0.0
+    total = 0
+    for word_tokens, word_offsets, char_tokens, char_offsets, yb in loader:
+        word_tokens = word_tokens.to(device)
+        word_offsets = word_offsets.to(device)
+        char_tokens = char_tokens.to(device)
+        char_offsets = char_offsets.to(device)
+        yb = yb.to(device)
+        optimizer.zero_grad()
+        logits = model(word_tokens, word_offsets, char_tokens, char_offsets)
+        loss = loss_fn(logits, yb)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item() * yb.size(0)
+        total += yb.size(0)
+    return running_loss / max(1, total)
+
+
 def evaluate(
     model: nn.Module,
     loader: DataLoader,
@@ -243,36 +280,17 @@ def train(config: TrainingConfig = TrainingConfig()) -> TrainingResult:
     ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight], device=device))
-    writer: Optional[SummaryWriter] = None
-    if config.log_dir is not None:
-        config.log_dir.mkdir(parents=True, exist_ok=True)
-        writer = SummaryWriter(log_dir=str(config.log_dir))
+    writer = _setup_writer(config.log_dir)
 
     best_metric = -math.inf
     best_epoch = -1
     best_state = None
 
     for epoch in range(config.max_epochs):
-        model.train()
-        running_loss = 0.0
-        count = 0
-        for batch in train_loader:
-            word_tokens, word_offsets, char_tokens, char_offsets, yb = batch
-            word_tokens = word_tokens.to(device)
-            word_offsets = word_offsets.to(device)
-            char_tokens = char_tokens.to(device)
-            char_offsets = char_offsets.to(device)
-            yb = yb.to(device)
-            optimizer.zero_grad()
-            logits = model(word_tokens, word_offsets, char_tokens, char_offsets)
-            loss = loss_fn(logits, yb)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * yb.size(0)
-            count += yb.size(0)
+        train_loss = _train_one_epoch(model, train_loader, device, optimizer, loss_fn)
         val_metrics = evaluate(model, val_loader, device)
         if writer is not None:
-            writer.add_scalar("train/loss", running_loss / max(1, count), epoch)
+            writer.add_scalar("train/loss", train_loss, epoch)
             writer.add_scalar("val/macro_f1", val_metrics["f1"], epoch)
             writer.add_scalar("val/roc_auc", val_metrics["roc_auc"], epoch)
         if val_metrics["f1"] > best_metric:

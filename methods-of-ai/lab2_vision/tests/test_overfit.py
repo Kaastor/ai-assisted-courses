@@ -1,4 +1,7 @@
 import torch
+import pytest
+
+pytest.importorskip("torchvision")
 
 from lab2_vision.train_cnn import SmallCNN, VisionConfig, train
 

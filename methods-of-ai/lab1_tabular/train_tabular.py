@@ -5,16 +5,19 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
 import torch
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
 from common.seed import set_seed
+from common.tensorboard import create_summary_writer
 from lab1_tabular.data import prepare_datasets
 from lab1_tabular.eval import evaluate
 from lab1_tabular.model import TabularNet
+
+
+Batch = Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
 @dataclass
@@ -41,7 +44,8 @@ class TrainingResult:
     test_metrics: Dict[str, float]
 
 
-def _collect_logits(model: nn.Module, loader, device: torch.device) -> Dict[str, torch.Tensor]:
+def _collect_logits(model: nn.Module, loader: Iterable[Batch], device: torch.device) -> Dict[str, torch.Tensor]:
+    """Materialise logits and labels for calibration."""
     logits = []
     labels = []
     with torch.no_grad():
@@ -55,7 +59,38 @@ def _collect_logits(model: nn.Module, loader, device: torch.device) -> Dict[str,
     }
 
 
-def calibrate_temperature(model: nn.Module, loader, device: torch.device) -> float:
+def _setup_writer(log_dir: Optional[Path]):
+    """Create a tensorboard writer when a log directory is provided."""
+
+    return create_summary_writer(log_dir)
+
+
+def _train_one_epoch(
+    model: nn.Module,
+    loader: Iterable[Batch],
+    device: torch.device,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: nn.Module,
+) -> float:
+    """Run a single optimisation epoch and return the average loss."""
+    model.train()
+    total_loss = 0.0
+    total_items = 0
+    for cats, nums, ys in loader:
+        cats = cats.to(device)
+        nums = nums.to(device)
+        ys = ys.to(device)
+        optimizer.zero_grad()
+        logits = model(cats, nums)
+        loss = loss_fn(logits, ys)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * ys.size(0)
+        total_items += ys.size(0)
+    return total_loss / max(1, total_items)
+
+
+def calibrate_temperature(model: nn.Module, loader: Iterable[Batch], device: torch.device) -> float:
     """Temperature scaling using LBFGS on validation logits."""
 
     cached = _collect_logits(model, loader, device)
@@ -93,10 +128,7 @@ def train(config: TrainingConfig = TrainingConfig()) -> TrainingResult:
     )
     loss_fn = nn.BCEWithLogitsLoss()
 
-    writer: Optional[SummaryWriter] = None
-    if config.log_dir is not None:
-        config.log_dir.mkdir(parents=True, exist_ok=True)
-        writer = SummaryWriter(log_dir=str(config.log_dir))
+    writer = _setup_writer(config.log_dir)
 
     best_metric = -math.inf
     best_epoch = -1
@@ -104,23 +136,8 @@ def train(config: TrainingConfig = TrainingConfig()) -> TrainingResult:
     remaining_patience = config.patience
 
     for epoch in range(config.max_epochs):
-        model.train()
-        total_loss = 0.0
-        total_items = 0
-        for cats, nums, ys in train_loader:
-            cats = cats.to(device)
-            nums = nums.to(device)
-            ys = ys.to(device)
-            optimizer.zero_grad()
-            logits = model(cats, nums)
-            loss = loss_fn(logits, ys)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item() * ys.size(0)
-            total_items += ys.size(0)
+        train_loss = _train_one_epoch(model, train_loader, device, optimizer, loss_fn)
         scheduler.step()
-
-        train_loss = total_loss / max(1, total_items)
         val_metrics = evaluate(model, val_loader, device)
         metric = val_metrics["roc_auc"]
         if writer is not None:

@@ -23,8 +23,8 @@ def fit_temperature(model: nn.Module, loader: Iterable, device: torch.device) ->
     """Fit a scalar temperature using validation data."""
 
     cached = collect_logits(model, loader, device)
-    logits = cached["logits"]
-    labels = cached["labels"]
+    logits = cached["logits"].clone().detach()
+    labels = cached["labels"].clone().detach()
     temperature = torch.nn.Parameter(torch.ones(1, device=device))
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.LBFGS([temperature], lr=0.01, max_iter=50)
