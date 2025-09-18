@@ -42,14 +42,21 @@
 
 ## Project Layout
 
-- **Source:** Typically under `app/`
-- **Tests:** `app/tests/`
-- **Config:** `pyproject.toml`
+- **Root files:** `pyproject.toml`, `poetry.lock`, `pytest.ini`, `outline.md`, `AGENTS.md`
+- **Shared utilities:** `common/` (metrics, seeding, tensorboard, visualisation helpers)
+- **Labs:**
+  - `lab1_tabular/` – tabular classification (`data.py`, `model.py`, `train_tabular.py`, `tests/`)
+  - `lab2_vision/` – computer vision CNN (`train_cnn.py`, `calibrate.py`, `tests/`)
+  - `lab3_text/` – text spam detection (`train_spam.py`, `vocab.py`, `tests/`)
+  - `lab4_transfer/` – transfer learning (`train_transfer.py`, `tests/`)
+  - `lab5_reliability/` – model reliability analysis (`analyze.py`, `metrics.py`, `slices.py`, `tests/`)
+  - `lab6_packaging/` – packaging exercise (`package.py`, `tests/`)
+- **Datasets & cache:** `.data/` (downloaded assets), `.pytest_cache/`, `runs/`
 
 > **Discover structure quickly:**  
 > `poetry run python -c "import pathlib; print('\\n'.join(str(p) for p in pathlib.Path('.').glob('**/*') if p.is_dir() and not any(s in p.parts for s in ('.git','.venv','__pycache__'))))"`  
 > or  
-> `tree -a -I '.git|.venv|__pycache__' -L 2`
+> `poetry run python - <<'PY'\nimport pathlib\nroot = pathlib.Path('.')\nignore = {'.git', '.venv', '__pycache__'}\nprint('\n'.join(str(p) for p in root.glob('*') if p.is_dir() and not ignore.intersection(p.parts)))\nPY`
 
 ---
 
