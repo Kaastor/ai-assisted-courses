@@ -31,6 +31,15 @@ poetry run python -m pytest lab1_tabular/tests -q
 
 The autograder ensures ROC-AUC ≥ 0.88 on the held-out test set and validation ECE ≤ 0.08 after temperature scaling.
 
+### Student Assignments (GitHub Classroom)
+
+Five practical, autograded assignments live under `lab1_tabular/assignments/` with per‑student variants:
+
+- Edit only `lab1_tabular/assignments/student.py` to complete tasks.
+- Local run: `RUN_ASSIGNMENT_TESTS=1 poetry run pytest -q lab1_tabular/assignments/tests`
+- In GitHub Classroom, the workflow in `.github/workflows/classroom.yml` runs these with `STUDENT_ID` set to the GitHub username; variant logic is in `lab1_tabular/assignments/variant.py`.
+
+
 ## Data & licensing
 
 - **Dataset:** UCI Adult (Census Income) — Creative Commons CC BY 4.0.

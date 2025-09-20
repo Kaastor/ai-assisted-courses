@@ -124,6 +124,27 @@ print(result.val_metrics, result.test_metrics)
 
 ---
 
+## 2.1) Practical Assignments (Autograded)
+
+Five short, hands‑on assignments live under `lab1_tabular/assignments/` and are autograded via GitHub Classroom. Each student gets a deterministic per‑student variant (based on GitHub username) for Assignment 5.
+
+- Edit only: `lab1_tabular/assignments/student.py`
+- Local run (enable assignment tests):
+  - `RUN_ASSIGNMENT_TESTS=1 poetry run pytest -q lab1_tabular/assignments/tests`
+- Per‑student variant (optional local override):
+  - `STUDENT_ID=<your-id> RUN_ASSIGNMENT_TESTS=1 poetry run pytest -q lab1_tabular/assignments/tests`
+
+Assignments:
+- A1 — Data Split: Implement `split_dataframe(df, seed)` → 70/15/15 splits, reproducible, no leakage.
+- A2 — Numeric Standardization: `prepare_numeric_stats(train_df, cols)` and `standardize_numeric(df, cols, means, stds)` with zero‑variance handled.
+- A3 — Categorical Encoding: `build_categorical_mapping(train_df, cols)` (0 reserved for unknown) and `encode_categoricals(df, mapping)`.
+- A4 — Simple MLP: Implement `SimpleMLP(input_dim, hidden_dims, dropout)` → Linear/ReLU/Dropout per hidden layer + final Linear to 1 logit.
+- A5 — Train One Epoch: Implement `train_one_epoch(model, loader, device, optimizer, loss_fn)` returning average loss; tests use your per‑student synthetic dataset.
+
+CI/Autograding:
+- Workflow: `.github/workflows/classroom.yml` installs deps and runs Classroom autograder.
+- Config: `.github/classroom/autograding.json` runs each assignment test separately and awards points per pass.
+
 ## 3) Talk‑track snippets (drop‑in lines)
 
 - **What is a logit?** “Real‑valued score; `sigmoid` → probability. We optimize **BCEWithLogitsLoss** on logits for stability.”

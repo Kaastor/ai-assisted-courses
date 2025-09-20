@@ -1,0 +1,65 @@
+{
+  "tests": [
+    {
+      "name": "Assignment 1 — Data split",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_assignment1_split.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 20
+    },
+    {
+      "name": "Assignment 2 — Numeric standardization",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_assignment2_numeric.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 20
+    },
+    {
+      "name": "Assignment 3 — Categorical encoding",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_assignment3_categorical.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 20
+    },
+    {
+      "name": "Assignment 4 — Simple MLP",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_assignment4_mlp.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 20
+    },
+    {
+      "name": "Assignment 5 — Train one epoch",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_assignment5_train.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 20
+    }
+    ,
+    {
+      "name": "Hygiene checks",
+      "setup": "",
+      "run": "poetry run python -m pytest -q lab1_tabular/assignments/tests/test_hygiene.py",
+      "input": "",
+      "output": "passed",
+      "comparison": "contains",
+      "timeout": 600000,
+      "points": 0
+    }
+  ]
+}
